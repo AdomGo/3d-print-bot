@@ -1,4 +1,72 @@
-lt, list) and result:
+import os
+import random
+import tempfile
+import aiohttp
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import FSInputFile
+from aiogram.exceptions import TelegramAPIError
+
+from config import BOT_TOKEN, CHANNEL_ID, HF_API_KEY, USE_AI_DESCRIPTION
+from database import Database
+from parsers import PARSERS
+
+
+# ── Hugging Face AI: описание по фото ────────────────────
+HF_HEADERS = {}
+
+if USE_AI_DESCRIPTION and HF_API_KEY:
+    HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
+    print("🤖 Hugging Face AI подключён — описание будет генерироваться по фото")
+elif USE_AI_DESCRIPTION:
+    print("⚠️ HF_API_KEY не задан — AI-описания отключены")
+
+
+async def generate_description(image_url: str) -> str:
+    """Генерирует русское описание 3D-модели по фото через Hugging Face"""
+    if not HF_HEADERS:
+        return None
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                image_url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                image_bytes = await resp.read()
+
+            async with session.post(
+                "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
+                headers=HF_HEADERS,
+                data=image_bytes,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as resp:
+                if resp.status != 200:
+                    print(f"HF BLIP error: {resp.status}")
+                    return None
+                result = await resp.json()
+
+            en_text = ""
+            if isinstance(result, list) and result:
+                en_text = result[0].get("generated_text", "").strip()
+
+            if not en_text:
+                return None
+
+            print(f"🤖 BLIP (EN): {en_text[:100]}...")
+
+            async with session.post(
+                "https://api-inference.huggingface.co/models/Helsinki-NLP/opus-mt-en-ru",
+                headers=HF_HEADERS,
+                json={"inputs": en_text},
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                if resp.status != 200:
+                    return en_text
+                result = await resp.json()
+
+            if isinstance(result, list) and result:
                 ru_text = result[0].get("translation_text", en_text)
                 print(f"🤖 Translated (RU): {ru_text[:100]}...")
                 return ru_text
