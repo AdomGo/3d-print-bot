@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: 3d-print-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHANNEL_ID
+        sync: false
+      - key: HF_API_KEY
+        sync: false
+      - key: USE_AI_DESCRIPTION
+        value: "true"
+      - key: TIMEZONE
+        value: Europe/Moscow
+      - key: PORT
+        value: "8000"
