@@ -11,10 +11,8 @@ from config import BOT_TOKEN, CHANNEL_ID, HF_API_KEY, USE_AI_DESCRIPTION
 from database import Database
 from parsers import PARSERS
 
-
 # ── Hugging Face AI: описание по фото ────────────────────
 HF_HEADERS = {}
-
 if USE_AI_DESCRIPTION and HF_API_KEY:
     HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
     print("🤖 Hugging Face AI подключён — описание будет генерироваться по фото")
@@ -26,7 +24,6 @@ async def generate_description(image_url: str) -> str:
     """Генерирует русское описание 3D-модели по фото через Hugging Face"""
     if not HF_HEADERS:
         return None
-
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -36,6 +33,7 @@ async def generate_description(image_url: str) -> str:
                     return None
                 image_bytes = await resp.read()
 
+            # Шаг 1: описание на английском
             async with session.post(
                 "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
                 headers=HF_HEADERS,
@@ -56,6 +54,7 @@ async def generate_description(image_url: str) -> str:
 
             print(f"🤖 BLIP (EN): {en_text[:100]}...")
 
+            # Перевод на русский
             async with session.post(
                 "https://api-inference.huggingface.co/models/Helsinki-NLP/opus-mt-en-ru",
                 headers=HF_HEADERS,
@@ -70,16 +69,12 @@ async def generate_description(image_url: str) -> str:
                 ru_text = result[0].get("translation_text", en_text)
                 print(f"🤖 Translated (RU): {ru_text[:100]}...")
                 return ru_text
-
             return en_text
-
     except Exception as e:
         print(f"🤖 HF error: {e}")
-
     return None
 
 
-# ── ModelPoster ───────────────────────────────────────────
 class ModelPoster:
     def __init__(self):
         self.bot = Bot(token=BOT_TOKEN)
